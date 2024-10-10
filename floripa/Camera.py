@@ -3,6 +3,7 @@ import numpy as np
 from math import pi
 from app.camera.Camera import Camera
 
+
 camera = Camera()
 camera_type = "droid"
 camera.initialize_video_capture(camera_type)

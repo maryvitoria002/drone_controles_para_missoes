@@ -1,7 +1,7 @@
 from geopy.distance import distance
 from geopy.point import Point
 from pymavlink import mavutil
-from math import radians, sin, cos, sqrt, atan2
+from math import radians, sin, cos, sqrt, atan2, asin, degrees
 
 class GPS: 
     def __init__(self) -> None:
@@ -18,7 +18,7 @@ class GPS:
         lat1 = radians(lat1)
         lon1 = radians(lon1)
         lat2 = radians(lat2)
-        lon2 = radians(lon2)
+        lon2 = radians(lon2)   
 
         # Diferença entre as coordenadas
         dlat = lat2 - lat1
@@ -56,6 +56,32 @@ class GPS:
         
         return new_lat, new_long
 
+    
+    def meters_to_geo(self, lat, lon, distance_m, bearing_deg):
+        # Raio médio da Terra em metros
+        R = 6371000  
+
+        # Converter graus para radianos
+        lat_rad = radians(lat)
+        lon_rad = radians(lon)
+        bearing_rad = radians(bearing_deg)
+
+        # Calcular a nova latitude
+        lat2_rad = asin(sin(lat_rad) * cos(distance_m / R) +
+                         cos(lat_rad) * sin(distance_m / R) * cos(bearing_rad))
+
+        # Calcular a nova longitude
+        lon2_rad = lon_rad + atan2(sin(bearing_rad) * sin(distance_m / R) * cos(lat_rad),
+                                    cos(distance_m / R) - sin(lat_rad) * sin(lat2_rad))
+
+        # Converter de volta para graus
+        lat2 = degrees(lat2_rad)
+        lon2 = degrees(lon2_rad)
+
+    # Normalizar a longitude para ficar entre -180 e 180 graus
+        lon2 = (lon2 + 540) % 360 - 180
+
+        return lat2, lon2
     
 # # Exemplo de uso
 # lat_initital = -14.303033

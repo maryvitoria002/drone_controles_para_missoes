@@ -331,7 +331,7 @@ class Drone:
         distance = self.calculate_distance(current_lat, current_long, target_lat, target_long)
         return distance < 5  # 5 metros
 
-    def move_to_position(self, target_lat, target_long, max_attempts=20, movement_check_interval=5):
+    def move_to_position(self, target_lat, target_long, max_attempts=30, movement_check_interval=5):
         """Move o drone para a posição especificada com verificação de progresso e otimizações."""
         attempt = 0
         
