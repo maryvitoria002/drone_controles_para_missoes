@@ -41,7 +41,7 @@ class CameraAnalog(CameraConnection):
     source = '/dev/video2'
     
 class CameraDroidCAM(CameraConnection):
-    source = 'http://10.70.196.179:4747/video'
+    source = 'http://10.70.199.185:4747/video'
 class CameraConnectionFactory():
     
     @staticmethod
