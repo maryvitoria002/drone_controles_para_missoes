@@ -7,6 +7,7 @@ import time
 
 camera = Camera()
 camera_type = "droid"
+
 camera.initialize_video_capture(camera_type)
 
 def detect_shape(contour):
@@ -36,12 +37,24 @@ def detect_shape(contour):
 
 reference_pixels = 300  
 reference_size_cm = 46   
-reference_distance = 106 # cm  
+reference_distance = 63.5 # cm  
 current_distance_cm = 30
 
 def calculate_real_size(pixels_detected, current_distance_cm):
     real_size =  (reference_size_cm / reference_pixels) * pixels_detected * (current_distance_cm / reference_distance)
     return real_size
+
+def convert_area_px2_to_cm2(area_pixels, reference_pixels, reference_size_cm, reference_distance_cm, current_distance_cm):
+    cm_per_pixel_ref = reference_size_cm / reference_pixels
+    cm_per_pixel_current = cm_per_pixel_ref * (current_distance_cm / reference_distance_cm)
+    area_cm2 = area_pixels * (cm_per_pixel_current ** 2)
+    return area_cm2
+
+def convert_perimeter_px_to_cm(perimeter_pixels, reference_pixels, reference_size_cm, reference_distance_cm, current_distance_cm):
+    cm_per_pixel_ref = reference_size_cm / reference_pixels
+    cm_per_pixel_current = cm_per_pixel_ref * (current_distance_cm / reference_distance_cm)
+    perimeter_cm = perimeter_pixels * cm_per_pixel_current
+    return perimeter_cm
 
 def preprocess_image(image):
     gray = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
@@ -77,7 +90,8 @@ def get_area(shape, real_size_cm_x, real_size_cm_y):
     return area
 
 def main(distance = 0):
-    current_distance_cm = distance * 100 if distance else 30
+    # current_distance_cm = distance * 100 if distance else 30
+    current_distance_cm = 68
     count = 0
 
     while camera.cap.isOpened():
@@ -96,9 +110,7 @@ def main(distance = 0):
             if area < 50:
                 continue
 
-            cm_per_pixel_ref = reference_size_cm / reference_pixels
-            cm_per_pixel_current = cm_per_pixel_ref * (current_distance_cm / reference_distance)
-            area_cm2 = area * (cm_per_pixel_current ** 2)
+            area_cm2 = convert_area_px2_to_cm2(area, reference_pixels, reference_size_cm, reference_distance, current_distance_cm)
         
             shape = detect_shape(contour)
             if shape:
@@ -110,8 +122,9 @@ def main(distance = 0):
                 real_size_cm_y = calculate_real_size(h, current_distance_cm)
             
                 area_px2 = get_area(shape, real_size_cm_x, real_size_cm_y)
+                perimeter_cm = convert_perimeter_px_to_cm(cv.arcLength(contour, True), reference_pixels, reference_size_cm, reference_distance, current_distance_cm)
         
-                size_text = f"Area: {area_px2:.2f}, Perimeter: {cv.arcLength(contour, True):.2f}"
+                size_text = f"Area: {area_px2:.2f}, Perimeter: {perimeter_cm:.2f}"
                 cv.putText(frame, size_text, (x, y + h + 20), cv.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 1)
                 print(f"Last frame: {current_distance_cm:.2f} {area_cm2:.2f}, {area_px2:.2f}") 
 
