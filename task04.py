@@ -25,19 +25,41 @@ drone = Drone()
 if not drone.connected():
     exit()
 
-lat, lon, alt = drone.get_gps_position()    
+def run():
+    try:
+        lat, lon, alt = drone.get_gps_position()    
 
-drone.disable_pre_arm_checks()
-drone.change_to_guided_mode()
+        drone.disable_pre_arm_checks()
+        drone.change_to_guided_mode()
 
-drone.set_home(coord_a[0], coord_a[1])
+        drone.set_home(coord_a[0], coord_a[1])
 
-drone.ascend(3)
+        drone.ascend(3)
 
-drone.move_to_position(coord_a[0], coord_a[1])
-time.sleep(10)
+        drone.move_to_position(coord_a[0], coord_a[1])
+        time.sleep(10)
 
-drone.move_to_position(coord_b[0], coord_b[1])
-time.sleep(10)
+        drone.move_to_position(coord_b[0], coord_b[1])
+        time.sleep(10)
 
-drone.return_to_home()
+        drone.return_to_home()
+    
+    except KeyboardInterrupt:
+        drone.land()
+        drone.disarm()
+        exit()
+
+    except Exception as e:
+        print(e)
+        drone.land()
+        drone.disarm()
+        exit()
+
+while True:
+    msg = drone.conn.recv_match(type=['RC_CHANNELS', 'RC_CHANNELS_RAW'], blocking=True)
+    if msg.chan6_raw:
+        if msg.chan6_raw >= 2014:
+            print("Canal 6 detectado.")
+            run()
+            break
+

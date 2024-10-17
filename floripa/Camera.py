@@ -6,7 +6,7 @@ import time
 
 
 camera = Camera()
-camera_type = "droid"
+camera_type = "imx"
 
 camera.initialize_video_capture(camera_type)
 

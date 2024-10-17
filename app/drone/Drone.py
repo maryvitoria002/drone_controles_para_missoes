@@ -19,9 +19,9 @@ class DroneConfig:
 # senha:101263
 class Drone:
     def __init__(self) -> None:
-        self.IP = '127.0.0.1'
-        self.PORT = '14552'
-        self.PROTOCOL = 'udpin'
+        # self.IP = '127.0.0.1'
+        # self.PORT = '14552'
+        # self.PROTOCOL = 'udpin'
         
         # self.IP = '192.168.0.104'
         # self.PORT = '5760'
@@ -29,9 +29,9 @@ class Drone:
         
         # self.URL = f'/dev/serial/by-id/usb-ArduPilot_Pixhawk1-1M_3E0039001651343037373231-if00'
 
-        self.URL = f'{self.PROTOCOL}:{self.IP}:{self.PORT}'
+        #self.URL = f'{self.PROTOCOL}:{self.IP}:{self.PORT}'
         self.baud = '57600'
-        # self.URL = f'/dev/ttyUSB0'
+        self.URL = 'udp:127.0.0.1:14551'
         self.METER_CONVERTER = 1000.0
         self.conn =  mavutil.mavlink_connection(self.URL, baud=self.baud,  mav10=False)
         self.config = DroneConfig()

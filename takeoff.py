@@ -1,29 +1,20 @@
 from app.drone.Drone import Drone
-from floripa.Camera import main as measure_form
-from app.drone.tools.GPS import GPS
 
 drone = Drone()
-GPS = GPS()
-
-lat, lon, alt = drone.get_gps_position()
 
 if not drone.connected():
+    print("Drone not connected")
     exit()
 
 def run():
     try:
-        # drone.disable_pre_arm_checks()
-        drone.change_to_guided_mode()
+        lat, lon, _ = drone.get_gps_position()
         drone.set_home(lat, lon)
-
+        drone.change_to_guided_mode()
         drone.arm_drone()
-
         drone.ascend(1)
-
-        new_lat, new_lon = GPS.meters_to_geo(lat, lon, 2, 90)
-        drone.move_to_position(new_lat, new_lon)
-# measure_form(drone.current_altitude())
-        drone.return_to_home()
+        drone.land()
+        drone.disarm()
 
     except KeyboardInterrupt:
         drone.land()
@@ -34,6 +25,8 @@ def run():
         print(e)
         drone.land()
         drone.disarm()
+        exit()
+
 
 while True:
     msg = drone.conn.recv_match(type=['RC_CHANNELS', 'RC_CHANNELS_RAW'], blocking=True)
@@ -42,5 +35,4 @@ while True:
             print("Canal 6 detectado.")
             run()
             break
-
 
