@@ -11,7 +11,7 @@ def run():
         lat, lon, _ = drone.get_gps_position()
         drone.set_home(lat, lon)
         drone.change_to_guided_mode()
-        drone.arm_drone()
+        # drone.arm_drone()
         drone.ascend(1)
         drone.land()
         drone.disarm()

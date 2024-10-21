@@ -55,6 +55,12 @@ class Drone:
         if msg:
             return int(msg.relative_alt) / self.METER_CONVERTER   # Convertendo de mm para metros
         return None
+
+    def get_rangefinder_distance(self):
+        msg = self.conn.recv_match(type='RANGEFINDER', blocking=True, timeout=2)
+        if msg:
+            return msg.distance
+        return None
     
     def disable_pre_arm_checks(self):
         self.conn.mav.param_set_send(

@@ -3,6 +3,7 @@ import numpy as np
 from math import pi
 from app.camera.Camera import Camera
 from app.drone.Drone import Drone
+import math
 
 drone = Drone()
 camera = Camera()
@@ -48,9 +49,27 @@ def calculate_real_size(pixels_detected, current_distance_cm):
     return real_size
 
 def convert_area_px2_to_cm2(area_pixels, reference_pixels, reference_size_cm, reference_distance_cm, current_distance_cm):
+    if reference_pixels <= 0 or reference_distance_cm <= 0 or current_distance_cm <= 0:
+        print("Erro: Valores de referência inválidos para o cálculo da área.")
+        return None
+
     cm_per_pixel_ref = reference_size_cm / reference_pixels
     cm_per_pixel_current = cm_per_pixel_ref * (current_distance_cm / reference_distance_cm)
-    area_cm2 = area_pixels * (cm_per_pixel_current ** 2)
+
+    # print(f"cm_per_pixel_ref: {cm_per_pixel_ref}")
+    # print(f"cm_per_pixel_current: {cm_per_pixel_current}")
+    # print(f"area_pixels: {area_pixels}")
+
+    if cm_per_pixel_current <= 0:
+        print("Erro: cm_per_pixel_current é menor ou igual a zero.")
+        return None
+
+    try:
+        area_cm2 = area_pixels * (cm_per_pixel_current ** 2)
+    except OverflowError as e:
+        print(f"Erro de Overflow ao calcular area_cm2: {e}")
+        return None
+
     return area_cm2
 
 def convert_perimeter_px_to_cm(perimeter_pixels, reference_pixels, reference_size_cm, reference_distance_cm, current_distance_cm):
@@ -92,10 +111,23 @@ def get_area(shape, real_size_cm_x, real_size_cm_y):
             area = 0            
     return area
 
-def main(distance = 0):
+def main():
     count = 0
 
     while camera.cap.isOpened():
+        current_distance_m = drone.get_rangefinder_distance()
+        if current_distance_m is None:
+            continue
+        else:
+            current_distance_cm = current_distance_m * 100  # Converte metros para centímetros
+
+        # Verifica se a distância atual é válida
+        if current_distance_cm <= 0:
+            print("Distância inválida obtida do rangefinder.")
+            continue
+
+        print(f"current_distance_cm: {current_distance_cm}")
+
         count += 1
         ret, frame = camera.read_capture()
         frame = cv.flip(frame, 1)
@@ -105,11 +137,6 @@ def main(distance = 0):
         edges = preprocess_image(frame)
         contours, _ = cv.findContours(edges, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
     
-        current_distance_cm = drone.get_rangefinder_distance()
-        
-        if current_distance_cm is None:
-            continue
-        
         for contour in contours:
 
             area = cv.contourArea(contour)
@@ -117,22 +144,20 @@ def main(distance = 0):
                 continue
 
             area_cm2 = convert_area_px2_to_cm2(area, reference_pixels, reference_size_cm, reference_distance, current_distance_cm)
-        
+            
+            if area_cm2 is None:
+                continue
+
             shape = detect_shape(contour)
             if shape:
                 x, y, w, h = cv.boundingRect(contour)
                 cv.drawContours(frame, [contour], -1, (0, 255, 0), 2)
                 cv.putText(frame, shape, (x, y - 10), cv.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
             
-                real_size_cm_x = calculate_real_size(w, current_distance_cm)
-                real_size_cm_y = calculate_real_size(h, current_distance_cm)
-            
-                area_px2 = get_area(shape, real_size_cm_x, real_size_cm_y)
                 perimeter_cm = convert_perimeter_px_to_cm(cv.arcLength(contour, True), reference_pixels, reference_size_cm, reference_distance, current_distance_cm)
         
-                size_text = f"Area: {area_px2:.2f}, Perimeter: {perimeter_cm:.2f}"
+                size_text = f"Area: {area_cm2:.2f}, Perimeter: {perimeter_cm:.2f}"
                 cv.putText(frame, size_text, (x, y + h + 20), cv.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 1)
-                print(f"Last frame: {current_distance_cm:.2f} {area_cm2:.2f}, {area_px2:.2f}") 
 
         cv.imshow("Shape Detection with Size Estimation", frame)
         cv.imshow("Edges", edges)
@@ -143,19 +168,8 @@ def main(distance = 0):
         if cv.waitKey(1) & 0xFF == ord('q'):
             break
 
-        msg = drone.conn.recv_match(type=['RC_CHANNELS', 'RC_CHANNELS_RAW'], blocking=True)
-        if msg.chan6_raw:
-            if msg.chan6_raw <= 991:
-               break
-           
     camera.cap.release()
     cv.destroyAllWindows()
 
-def wait_to_continue(current_altitude):
-    while True:
-        msg = drone.conn.recv_match(type=['RC_CHANNELS', 'RC_CHANNELS_RAW'], blocking=True)
-        if msg.chan6_raw:
-            if msg.chan6_raw >= 2014:
-                main(current_altitude)
-                break
+
 

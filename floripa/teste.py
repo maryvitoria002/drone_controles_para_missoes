@@ -3,15 +3,16 @@ import numpy as np
 from math import pi
 from app.camera.Camera import Camera
 from app.drone.Drone import Drone
+import time
 
 drone = Drone()
 camera = Camera()
 camera_type = "rtsp"
 camera.initialize_video_capture(camera_type)
 
-if not drone.connected():
-    print("Drone not connected")
-    exit()
+#if not drone.connected():
+#    print("Drone not connected")
+#    exit()
 
 def detect_shape(contour):
     epsilon = 0.04 * cv.arcLength(contour, True)
@@ -93,6 +94,7 @@ def get_area(shape, real_size_cm_x, real_size_cm_y):
     return area
 
 def main(distance = 0):
+    current_distance_cm = distance * 100 if distance else 30
     count = 0
 
     while camera.cap.isOpened():
@@ -105,11 +107,6 @@ def main(distance = 0):
         edges = preprocess_image(frame)
         contours, _ = cv.findContours(edges, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
     
-        current_distance_cm = drone.get_rangefinder_distance()
-        
-        if current_distance_cm is None:
-            continue
-        
         for contour in contours:
 
             area = cv.contourArea(contour)
@@ -143,14 +140,17 @@ def main(distance = 0):
         if cv.waitKey(1) & 0xFF == ord('q'):
             break
 
-        msg = drone.conn.recv_match(type=['RC_CHANNELS', 'RC_CHANNELS_RAW'], blocking=True)
-        if msg.chan6_raw:
-            if msg.chan6_raw <= 991:
-               break
-           
+        # msg = drone.conn.recv_match(type=['RC_CHANNELS', 'RC_CHANNELS_RAW'], blocking=True)
+        # if msg.chan6_raw:
+            # if msg.chan6_raw <= 991:
+             #   break
+
+
     camera.cap.release()
     cv.destroyAllWindows()
 
+
+main()
 def wait_to_continue(current_altitude):
     while True:
         msg = drone.conn.recv_match(type=['RC_CHANNELS', 'RC_CHANNELS_RAW'], blocking=True)
