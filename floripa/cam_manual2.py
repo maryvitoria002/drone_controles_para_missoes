@@ -128,7 +128,9 @@ def main():
         print("Não foi possível iniciar o fluxo de vídeo.")
         return
 
+    count = 0
     while not video_stream.stopped:
+        count += 1
         # Atualiza a distância atual em cada iteração
         current_distance_m = drone.get_rangefinder_distance()
         if current_distance_m is None or current_distance_m <= 0:
@@ -180,8 +182,11 @@ def main():
  
         # Verificação de saída
         if cv.waitKey(1) & 0xFF == ord('q'):
-            cv.imwrite(r"C:\Users\bruno\educa_drone\floripa-tasks\floripa\file\print.png", frame)
+            cv.imwrite(r"C:\Users\bruno\educa_drone\floripa-tasks\floripa\file\print.png".format(count), frame)
             break
+        
+        if cv.waitKey(1) & 0xFF == ord('p'):
+            cv.imwrite(r"C:\Users\bruno\educa_drone\floripa-tasks\floripa\file\print{}.png".format(count), frame)
 
     # Liberação de recursos
     video_stream.stop()
