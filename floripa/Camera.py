@@ -93,10 +93,8 @@ def get_area(shape, real_size_cm_x, real_size_cm_y):
     return area
 
 def main(distance = 0):
-    count = 0
 
     while camera.cap.isOpened():
-        count += 1
         ret, frame = camera.read_capture()
         frame = cv.flip(frame, 1)
         if not ret:
@@ -136,11 +134,10 @@ def main(distance = 0):
 
         cv.imshow("Shape Detection with Size Estimation", frame)
         cv.imshow("Edges", edges)
-    
-        if count % 20 == 0:
-            cv.imwrite(r"C:\Users\bruno\educa_drone\floripa-tasks\floripa\file\print.png", frame)
+        
     
         if cv.waitKey(1) & 0xFF == ord('q'):
+            cv.imwrite(r"C:\Users\bruno\educa_drone\floripa-tasks\floripa\file\print.png", frame)
             break
 
         msg = drone.conn.recv_match(type=['RC_CHANNELS', 'RC_CHANNELS_RAW'], blocking=True)

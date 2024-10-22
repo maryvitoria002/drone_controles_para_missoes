@@ -11,8 +11,8 @@ from app.drone.Drone import Drone
 os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;udp"
 
 # Constantes Globais
-REFERENCE_PIXELS = 300
-REFERENCE_SIZE_CM = 46
+REFERENCE_PIXELS = 118
+REFERENCE_SIZE_CM = 10
 REFERENCE_DISTANCE_CM = 63.5
 
 class VideoStreamThread:
@@ -99,11 +99,15 @@ class ImageProcessor:
     @staticmethod
     def preprocess_image(image):
         gray = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
+        # blurred = cv.GaussianBlur(gray, (4, 4), 0)
         equalized = cv.equalizeHist(gray)
-        adjusted = cv.convertScaleAbs(equalized, alpha=1.5, beta=50)
+        alpha = 1.5  # Contraste
+        beta = 50    # Brilho
+        adjusted = cv.convertScaleAbs(equalized, alpha=alpha, beta=beta)
         edges = cv.Canny(adjusted, 50, 170)
         kernel = np.ones((5, 5), np.uint8)
         edges = cv.dilate(edges, kernel, iterations=1)
+        # edges = cv.erode(edges, None, iterations=1)
         return edges
 
 def main():
@@ -123,8 +127,6 @@ def main():
     if video_stream.stopped:
         print("Não foi possível iniciar o fluxo de vídeo.")
         return
-
-    count = 0
 
     while not video_stream.stopped:
         # Atualiza a distância atual em cada iteração
@@ -174,15 +176,11 @@ def main():
 
         # Exibição das imagens
         cv.imshow("Shape Detection with Size Estimation", frame)
-        cv.imshow("Edges", edges)
-
-        # Salvamento periódico de frames
-        if count % 20 == 0:
-            cv.imwrite(r"C:\Users\bruno\educa_drone\floripa-tasks\floripa\file\print.png", frame)
-        count += 1
-
+        # cv.imshow("Edges", edges)
+ 
         # Verificação de saída
         if cv.waitKey(1) & 0xFF == ord('q'):
+            cv.imwrite(r"C:\Users\bruno\educa_drone\floripa-tasks\floripa\file\print.png", frame)
             break
 
     # Liberação de recursos
