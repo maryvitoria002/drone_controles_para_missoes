@@ -31,7 +31,7 @@ class Drone:
 
         #self.URL = f'{self.PROTOCOL}:{self.IP}:{self.PORT}'
         self.baud = '57600'
-        self.URL = 'udp:127.0.0.1:14551'
+        self.URL = 'udp:127.0.0.1:14550'
         self.METER_CONVERTER = 1000.0
         self.conn =  mavutil.mavlink_connection(self.URL, baud=self.baud,  mav10=False)
         self.config = DroneConfig()
@@ -82,78 +82,117 @@ class Drone:
         print("Armando drone...")
         self.conn.mav.command_long_send(self.conn.target_system, self.conn.target_component, mavutil.mavlink.MAV_CMD_COMPONENT_ARM_DISARM, 0, 1, 0, 0, 0, 0, 0, 0)
         ack = False
-        while not ack:
+        repeat = 0
+        while not ack and repeat < 20:
             msg = self.conn.recv_match(type='COMMAND_ACK', blocking=True)
             ack = msg.command == mavutil.mavlink.MAV_CMD_COMPONENT_ARM_DISARM and msg.result == 0
+            repeat += 1
+            time.sleep(1)
         print("Drone armado.")
     
-    def ascend(self, target_altitude):
-        
+    def takeoff(self, target_altitude):
         self.conn.mav.command_long_send(
             self.conn.target_system, 
             self.conn.target_component,
             mavutil.mavlink.MAV_CMD_NAV_TAKEOFF,
-            0, 0, 0, 0, 0, 0, 0, target_altitude
+            0, 0, 0, 0, 0, 0, 0, target_altitude + 0.4
         )
         
-        while True:
-            print(f"Altura {self.current_altitude()}m")
-            
-            if self.current_altitude() == target_altitude:
+        while True:            
+            if self.current_altitude() >= target_altitude * 0.95:
                 break; 
-            time.sleep(1)
-        
-        # current_alt = self.current_altitude()
-        
-        # movement = DroneMoveUPFactory.create(current_alt, self.conn)
+            time.sleep(1)   
     
-        # movement.execute(target_altitude)
+    def go_to_location(self, latitude, longitude, altitude):
+
+        self.conn.mav.send(
+            mavutil.mavlink.MAVLink_set_position_target_global_int_message(
+                10, self.conn.target_system, self.conn.target_component,
+                mavutil.mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT,
+                0b0000111111000111,
+                0,
+                0,
+                altitude,
+                0, 0, 0, 0, 0, 0, 0, 0))
+        time.sleep(3)
         
-        # repeat = 0
-        # while True:
-        #     repeat = 1 + repeat
-        #     current_alt = self.current_altitude()
-        #     print(self.get_gps_position())
-            
-        #     print(f"Altitude atual: {current_alt}m")
-        #     if current_alt >= target_altitude * 0.95: 
-        #         print("Altitude alvo alcançada.")
-        #         break
-        #     elif repeat > 20:
-        #         print('Tentativa de comunicação excedeu o limite de tentivas... Tentando novamente.')
-        #         self.ascend(target_altitude)
-        #         break
+    def set_altitude(self, altitude):
+        print("Changing altitude to {} meters".format(altitude))
+        self.conn.mav.command_long_send(
+            self.conn.target_system,
+            self.conn.target_component,
+            mavutil.mavlink.MAV_CMD_NAV_WAYPOINT, 0, 0, 0, 0, 0, 0, 0,
+            0, altitude)
+        time.sleep(1)
+        
+    def ascend(self, target_altitude):
+        current_lat, current_lon, _ = self.get_gps_position()
+        lat_int = int(current_lat * 1e7)
+        lon_int = int(current_lon * 1e7)
+
+        velocity_z = -0.5 
+        
+        altitude_mm = int(target_altitude * self.METER_CONVERTER)
+        self.conn.mav.set_position_target_global_int_send(
+            0,                                                      # time_boot_ms (não usado)
+            self.conn.target_system, self.conn.target_component,
+            mavutil.mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT_INT,      # Altitude relativa ao terreno
+            0b0000111111000111,                                     # Ignora outras componentes (somente latitude, longitude, altitude e velocidade Z)
+            lat_int,                                                # Latitude (convertida para inteiro)
+            lon_int,                                                # Longitude (convertida para inteiro)
+            altitude_mm,                                            # Altitude desejada em milímetros
+            0, 0, velocity_z,                                       # Componentes de velocidade (X, Y, Z). Somente Z é usado.
+            0, 0, 0,                                                # Componentes de aceleração (ignorado)
+            0, 0                                                    # Yaw, yaw_rate (ignorado)
+        )
+        
+        while True:            
+            if self.current_altitude() <= target_altitude - 0.4:
+                break; 
+            time.sleep(1) 
 
         self.check_maximum_altitude()
     
     def descend(self, target_altitude):
-        msg = self.conn.recv_match(type='GLOBAL_POSITION_INT', blocking=True)
-        print(f"msg - msg.lat: {msg.lat} | msg.lon: {msg.lon}")
-        if not msg:
-            raise Exception("Failed to get current altitude")
-            
-        # Converta as coordenadas para milésimos de grau
-        current_lat = int(msg.lat / 1e7)
-        current_lon = int(msg.lon / 1e7)
-
-        # Parâmetros de velocidade (controlando a velocidade de descida)
-        velocity_z = 0.5  # Velocidade negativa para descer (em metros por segundo)
-
-        print(f"Descendo para {target_altitude} metros com velocidade {velocity_z} m/s.")
+        """
+        Desce o drone até atingir a altitude alvo (em metros) usando um comando
+        de alvo absoluto. Atenção: certifique-se de que a configuração do firmware
+        permita descidas abaixo dos 1.5 m se necessário.
+        """
+        print(f"Descendo para {target_altitude} m")
+        # Obtém a posição atual
+        current_lat, current_lon, _ = self.get_gps_position()
+        lat_int = int(current_lat * 1e7)
+        lon_int = int(current_lon * 1e7)
         
-        # Enviar comando MAVLink para ajustar altitude e controlar a velocidade
+        # Converter a altitude desejada para milímetros
+        target_alt_mm = int(target_altitude * self.METER_CONVERTER)
+        
+        # Velocidade vertical negativa indica descida
+        velocity_z = -0.5  # m/s
+
         self.conn.mav.set_position_target_global_int_send(
-            0,  # time_boot_ms (não usado)
-            self.conn.target_system, self.conn.target_component,
-            mavutil.mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT_INT,  # Altitude relativa ao terreno
-            0b0000111111000111,  # Ignora outras componentes (somente latitude, longitude, altitude e velocidade Z)
-            current_lat,  # Latitude atual (mantida)
-            current_lon,  # Longitude atual (mantida)
-            int(target_altitude),  # Altitude desejada em milímetros
-            0, 0, velocity_z,  # Componentes de velocidade (X, Y, Z). Somente Z é usado.
-            0, 0, 0,  # Componentes de aceleração (ignorado)
-            0, 0  # Yaw, yaw_rate (ignorado)
+            0,  # time_boot_ms
+            self.conn.target_system,
+            self.conn.target_component,
+            mavutil.mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT_INT,
+            0b0000111111000111,  # Ignora tudo exceto posição e velocidade Z
+            lat_int,
+            lon_int,
+            target_alt_mm,
+            0, 0, velocity_z,
+            0, 0, 0,
+            0, 0
         )
+
+        tolerance = 0.1  # tolerância em metros
+        while True:
+            current_alt = self.current_altitude()
+            print(f"Altitude atual: {current_alt} m")
+            if current_alt <= target_altitude + tolerance:
+                print("Altitude desejada atingida.")
+                break
+            time.sleep(1)
              
     def land(self):
         print("Comando de pouso enviado ao drone.")
@@ -167,11 +206,8 @@ class Drone:
         
         while True:
             print(f"Altura {self.current_altitude()}m")
-            print('Descendo... \n')
             if self.current_altitude() < 0.1:
                 break; 
-            
-        print('Desceu com crtz')
          
     def set_mode(self, mode):
         if mode not in self.conn.mode_mapping():
@@ -185,13 +221,18 @@ class Drone:
             mavutil.mavlink.MAV_MODE_FLAG_CUSTOM_MODE_ENABLED,
             mode_id
         )
-
+        
         while True:
-            ack = self.conn.recv_match(type='COMMAND_ACK', blocking=True)
-            ack_msg = mavutil.mavlink.enums['MAV_RESULT'][ack.result].description
-            print("Modo de comando:", ack_msg)
-            if ack_msg == 'ACCEPTED':
+            # Aguardar o heartbeat e obter o modo atual
+            heartbeat = self.conn.recv_match(type='HEARTBEAT', blocking=True)
+            current_mode = heartbeat.custom_mode  # O modo atual
+            
+            # Verifique se o modo foi alterado para GUIDED
+            if current_mode == mode:
                 break
+
+            time.sleep(1)
+
         print(f"Modo alterado para {mode}")
 
     def disarm(self):
@@ -204,40 +245,26 @@ class Drone:
         )
     
     def change_to_guided_mode(self):
-        print("Mudando para modo GUIDED...")
-        
-        # self.conn.mav.command_long_send(
-        #     self.conn.target_system,
-        #     self.conn.target_component,
-        #     mavutil.mavlink.MAV_CMD_DO_SET_MODE,
-        #     0,
-        #     0,
-        #     self.config.GUIDED_MODE,
-        #     0, 0, 0, 0, 0
-        # )
+        """
+        Change the flight mode to GUIDED
+        """
 
         self.conn.mav.set_mode_send(
             self.conn.target_system,
             mavutil.mavlink.MAV_MODE_FLAG_CUSTOM_MODE_ENABLED,
             self.config.GUIDED_MODE  # GUIDED mode
         )
-
-        # Aguarda confirmação de mudança de modo
+        
         while True:
-            msg = self.conn.recv_match(type='COMMAND_ACK', blocking=False)
-            if msg:
-                print("Received msg: ", msg)
-                expected_command = mavutil.mavlink.MAV_CMD_DO_SET_MODE
-                expected_result = mavutil.mavlink.MAV_RESULT_ACCEPTED
-                print(f"Comando esperado: {expected_command} | Resultado: {expected_result}")
-                
-                # Verifica se o comando corresponde ao esperado e se foi aceito
-                if msg.command == 11 and msg.result == 0:
-                    print("GUIDED mode set.")
-                    break
-                else:
-                    print("Still waiting for GUIDED mode confirmation...")
-                    print(f"Received command: {msg.command} | Result: {msg.result}")
+            # Aguardar o heartbeat e obter o modo atual
+            heartbeat = self.conn.recv_match(type='HEARTBEAT', blocking=True)
+            current_mode = heartbeat.custom_mode  # O modo atual
+            
+            # Verifique se o modo foi alterado para GUIDED
+            if current_mode == self.config.GUIDED_MODE:
+                break
+
+            time.sleep(1)
    
     def get_gps_position(self):
         """
