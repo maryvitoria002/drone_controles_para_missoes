@@ -8,3 +8,4 @@ if not drone.connected():
     exit()
 
 print(math.trunc(drone.get_rangefinder_distance() * 100))
+print(drone.current_altitude())

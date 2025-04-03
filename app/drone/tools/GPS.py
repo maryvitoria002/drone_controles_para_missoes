@@ -59,7 +59,7 @@ class GPS:
     
     def meters_to_geo(self, lat, lon, distance_m, bearing_deg):
         # Raio médio da Terra em metros
-        R = 6371000  
+        R = 6367400  
 
         # Converter graus para radianos
         lat_rad = radians(lat)

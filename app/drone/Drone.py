@@ -18,31 +18,26 @@ class DroneConfig:
         
 # senha:101263
 class Drone:
-    def __init__(self) -> None:
-        # self.IP = '127.0.0.1'
-        # self.PORT = '14552'
-        # self.PROTOCOL = 'udpin'
-        
-        # self.IP = '192.168.0.104'
-        # self.PORT = '5760'
-        # self.PROTOCOL = 'tcp'
-        
-        # self.URL = f'/dev/serial/by-id/usb-ArduPilot_Pixhawk1-1M_3E0039001651343037373231-if00'
-
-        #self.URL = f'{self.PROTOCOL}:{self.IP}:{self.PORT}'
+    def __init__(self) -> None:   
+        self.IP = '127.0.0.1' # 192.168.0.104
+        self.PORT = '14550' # 5760
+        self.PROTOCOL = 'udp' #tcp
         self.baud = '57600'
-        self.URL = 'udp:127.0.0.1:14550'
+        
+        # self.URL = f'/dev/serial/by-id/usb-ArduPilot_Pixhawk1-1M_3E0039001651343037373231-if00' 
+
+        self.URL = f'{self.PROTOCOL}:{self.IP}:{self.PORT}'
         self.METER_CONVERTER = 1000.0
-        self.conn =  mavutil.mavlink_connection(self.URL, baud=self.baud,  mav10=False)
+        self.conn =  mavutil.mavlink_connection(self.URL, baud=self.baud)
         self.config = DroneConfig()
         self.velocity = 30
         self.gps = GPS()
-        #self.servo = ServoController()
+        # self.servo = ServoController()
 
         self.home_lat = None
         self.home_long = None
 
-        #self.drone_controller = DroneController()
+        # self.drone_controller = DroneController()
         
     def connected(self):
         return self.conn.wait_heartbeat(timeout=5)
@@ -102,62 +97,19 @@ class Drone:
             if self.current_altitude() >= target_altitude * 0.95:
                 break; 
             time.sleep(1)   
-    
-    def go_to_location(self, latitude, longitude, altitude):
-
-        self.conn.mav.send(
-            mavutil.mavlink.MAVLink_set_position_target_global_int_message(
-                10, self.conn.target_system, self.conn.target_component,
-                mavutil.mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT,
-                0b0000111111000111,
-                0,
-                0,
-                altitude,
-                0, 0, 0, 0, 0, 0, 0, 0))
-        time.sleep(3)
         
     def set_altitude(self, altitude):
-        print("Changing altitude to {} meters".format(altitude))
-        self.conn.mav.command_long_send(
-            self.conn.target_system,
-            self.conn.target_component,
-            mavutil.mavlink.MAV_CMD_NAV_WAYPOINT, 0, 0, 0, 0, 0, 0, 0,
-            0, altitude)
-        time.sleep(1)
+        current_alt = self.current_altitude()
+        if altitude > current_alt:
+            self.ascend(altitude)
+        elif altitude < current_alt:
+            self.descend(altitude)
+        else:
+            return 
         
     def ascend(self, target_altitude):
-        current_lat, current_lon, _ = self.get_gps_position()
-        lat_int = int(current_lat * 1e7)
-        lon_int = int(current_lon * 1e7)
-
-        velocity_z = -0.5 
-        
-        altitude_mm = int(target_altitude * self.METER_CONVERTER)
-        self.conn.mav.set_position_target_global_int_send(
-            0,                                                      # time_boot_ms (não usado)
-            self.conn.target_system, self.conn.target_component,
-            mavutil.mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT_INT,      # Altitude relativa ao terreno
-            0b0000111111000111,                                     # Ignora outras componentes (somente latitude, longitude, altitude e velocidade Z)
-            lat_int,                                                # Latitude (convertida para inteiro)
-            lon_int,                                                # Longitude (convertida para inteiro)
-            altitude_mm,                                            # Altitude desejada em milímetros
-            0, 0, velocity_z,                                       # Componentes de velocidade (X, Y, Z). Somente Z é usado.
-            0, 0, 0,                                                # Componentes de aceleração (ignorado)
-            0, 0                                                    # Yaw, yaw_rate (ignorado)
-        )
-        
-        while True:            
-            if self.current_altitude() <= target_altitude - 0.4:
-                break; 
-            time.sleep(1) 
-
-        self.check_maximum_altitude()
-    
-    def descend(self, target_altitude):
         """
-        Desce o drone até atingir a altitude alvo (em metros) usando um comando
-        de alvo absoluto. Atenção: certifique-se de que a configuração do firmware
-        permita descidas abaixo dos 1.5 m se necessário.
+        Desce o drone até atingir a altitude alvo (em metros)
         """
         print(f"Descendo para {target_altitude} m")
         # Obtém a posição atual
@@ -167,32 +119,63 @@ class Drone:
         
         # Converter a altitude desejada para milímetros
         target_alt_mm = int(target_altitude * self.METER_CONVERTER)
+        velocity_z = -0.4  # m/s
         
-        # Velocidade vertical negativa indica descida
-        velocity_z = -0.5  # m/s
-
-        self.conn.mav.set_position_target_global_int_send(
-            0,  # time_boot_ms
-            self.conn.target_system,
-            self.conn.target_component,
-            mavutil.mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT_INT,
-            0b0000111111000111,  # Ignora tudo exceto posição e velocidade Z
-            lat_int,
-            lon_int,
-            target_alt_mm,
-            0, 0, velocity_z,
-            0, 0, 0,
-            0, 0
-        )
-
-        tolerance = 0.1  # tolerância em metros
         while True:
-            current_alt = self.current_altitude()
-            print(f"Altitude atual: {current_alt} m")
-            if current_alt <= target_altitude + tolerance:
+            self.conn.mav.set_position_target_global_int_send(
+                0,  # time_boot_ms
+                self.conn.target_system,
+                self.conn.target_component,
+                mavutil.mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT,
+                0b0000111111000111,  # Ignora tudo exceto posição e velocidade Z
+                lat_int,
+                lon_int,
+                target_alt_mm,
+                0, 0, velocity_z,
+                0, 0, 0,
+                0, 0
+            )
+                
+            print(self.current_altitude())
+            if self.current_altitude() >= target_altitude - 0.8:
                 print("Altitude desejada atingida.")
-                break
-            time.sleep(1)
+                return
+
+        self.check_maximum_altitude()
+    
+    def descend(self, target_altitude):
+        """
+        Desce o drone até atingir a altitude alvo (em metros)
+        """
+        print(f"Descendo para {target_altitude} m")
+        # Obtém a posição atual
+        current_lat, current_lon, _ = self.get_gps_position()
+        lat_int = int(current_lat * 1e7)
+        lon_int = int(current_lon * 1e7)
+        
+        # Converter a altitude desejada para milímetros
+        target_alt_mm = int(target_altitude * self.METER_CONVERTER)
+        velocity_z = 0.4  # m/s
+        
+        while True:
+            self.conn.mav.set_position_target_global_int_send(
+                0,  # time_boot_ms
+                self.conn.target_system,
+                self.conn.target_component,
+                mavutil.mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT,
+                0b0000111111000111,  # Ignora tudo exceto posição e velocidade Z
+                lat_int,
+                lon_int,
+                target_alt_mm,
+                0, 0, velocity_z,
+                0, 0, 0,
+                0, 0
+            )
+   
+            print(self.current_altitude())
+            if self.current_altitude() <= target_altitude + 0.8:
+                print("Altitude desejada atingida.")
+                return
              
     def land(self):
         print("Comando de pouso enviado ao drone.")
